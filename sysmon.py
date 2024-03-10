@@ -6,7 +6,8 @@
 # 
 # Created Fri 08 Mar 2024 06:26:41 PM CST by JAU - 
 # Modifyied Sat 09 Mar 2024 16:45:10 PM CST by JAU - added ver/date label & press Q to quit feature
-#
+# Modifyied Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added label to upper left portion screen
+
 #----------------------------------------------------------------
 import psutil
 import time
@@ -20,25 +21,14 @@ import numpy as np
 version_number = "0.0.1"
 release_date = "2024-03-08"
 
-
-
 import matplotlib.pylab as pylab
 params = {'legend.fontsize': 'x-small',
-          'figure.figsize': (15, 5),
+          'figure.figsize': (10, 5),
          'axes.labelsize': 'x-small',
          'axes.titlesize':'x-small',
          'xtick.labelsize':'x-small',
          'ytick.labelsize':'x-small'}
 pylab.rcParams.update(params)
-
-
-# Update rcParams to include grid lines
-plt.rcParams.update({
-    'grid.color': 'gray', # Grid line color
-    'grid.linestyle': '--', # Grid line style
-    'grid.linewidth': 0.5, # Grid line width
-})
-
 
 def get_cpu_usage():
     return psutil.cpu_percent(interval=.1)
@@ -62,8 +52,16 @@ def main():
     print("=" * 20)
 
     plt.ion()
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 8))
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5))
     fig.canvas.set_window_title('System Monitor')
+
+
+    
+    # Add a label in the upper left corner of the figure
+    fig.text(0.01, 0.95, 'Your Label Here',
+             verticalalignment='top', horizontalalignment='left',
+             transform=fig.transFigure, fontsize=10)
+
 
     
     # Add version number and release date to the lower right corner of the figure
