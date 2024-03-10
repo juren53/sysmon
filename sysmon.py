@@ -1,13 +1,13 @@
 #!/usr/bin/python3
-#---------------------sysmon-5.py v0.01--------------------------
+#---------------------sysmon.py v0.02--------------------------
 # This code is a simple system monitor that displays CPU utilization, network I/O (upload and download speeds), 
 # and disk I/O (read and write speeds) in real-time using psutil for system metrics, matplotlib for 
 # visualization, and numpy for numerical operations.
 # 
 # Created Fri 08 Mar 2024 06:26:41 PM CST by JAU - 
 # Modifyied Sat 09 Mar 2024 16:45:10 PM CST by JAU - added ver/date label & press Q to quit feature
-# Modifyied Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added label to upper left portion screen
-
+# Modifyied Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added labels to across top of screen 
+#
 #----------------------------------------------------------------
 import psutil
 import time
@@ -16,10 +16,21 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 
+import socket
+import platform
+import requests
+
 
 # Define the version number and release date
 version_number = "0.0.1"
 release_date = "2024-03-08"
+
+hostname = socket.gethostname()
+ip_address = socket.gethostbyname(socket.gethostname())
+response = requests.get('https://httpbin.org/ip')
+external_ip_address = response.json()['origin']
+
+os_info = platform.system() + " " + platform.release()
 
 import matplotlib.pylab as pylab
 params = {'legend.fontsize': 'x-small',
@@ -55,12 +66,17 @@ def main():
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5))
     fig.canvas.set_window_title('System Monitor')
 
-
     
     # Add a label in the upper left corner of the figure
-    fig.text(0.01, 0.95, 'Your Label Here',
+    fig.text(0.01, 0.95, f'{hostname}     {os_info}',
              verticalalignment='top', horizontalalignment='left',
-             transform=fig.transFigure, fontsize=10)
+             transform=fig.transFigure, fontsize=8)
+
+  
+    # Add a label in the upper right corner of the figure
+    fig.text(0.95, 0.95, f'{ip_address}    {external_ip_address}',
+             verticalalignment='top', horizontalalignment='right',
+             transform=fig.transFigure, fontsize=8)
 
 
     
