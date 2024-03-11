@@ -5,9 +5,9 @@
 # visualization, and numpy for numerical operations.
 # 
 # Created Fri 08 Mar 2024 06:26:41 PM CST by JAU - 
-# Modifyied Sat 09 Mar 2024 16:45:10 PM CST by JAU - added ver/date label & press Q to quit feature
-# Modifyied Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added labels to across top of screen 
-#
+# Modified Sat 09 Mar 2024 16:45:10 PM CST by JAU - added ver/date label & press Q to quit feature
+# Modified Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added labels to across top of screen 
+#   and removed tool bar at bottom of the screen
 #----------------------------------------------------------------
 import psutil
 import time
@@ -19,6 +19,7 @@ import numpy as np
 import socket
 import platform
 import requests
+import subprocess
 
 
 # Define the version number and release date
@@ -26,11 +27,14 @@ version_number = "0.0.1"
 release_date = "2024-03-08"
 
 hostname = socket.gethostname()
-ip_address = socket.gethostbyname(socket.gethostname())
+#ip_address = socket.gethostbyname(socket.gethostname())
 response = requests.get('https://httpbin.org/ip')
 external_ip_address = response.json()['origin']
 
 os_info = platform.system() + " " + platform.release()
+
+output = subprocess.check_output(["hostname", "-I"]).decode()
+ip_address = output.strip().split(" ")[0]
 
 import matplotlib.pylab as pylab
 params = {'legend.fontsize': 'x-small',
@@ -40,6 +44,7 @@ params = {'legend.fontsize': 'x-small',
          'xtick.labelsize':'x-small',
          'ytick.labelsize':'x-small'}
 pylab.rcParams.update(params)
+pylab.rcParams['toolbar'] = 'None'
 
 def get_cpu_usage():
     return psutil.cpu_percent(interval=.1)
@@ -64,6 +69,7 @@ def main():
 
     plt.ion()
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5))
+    #fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5), toolbar=False)
     fig.canvas.set_window_title('System Monitor')
 
     
