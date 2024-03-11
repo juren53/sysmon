@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-#---------------------sysmon.py v0.02--------------------------
+#---------------------sysmon.py v0.03--------------------------
 # This code is a simple system monitor that displays CPU utilization, network I/O (upload and download speeds), 
 # and disk I/O (read and write speeds) in real-time using psutil for system metrics, matplotlib for 
 # visualization, and numpy for numerical operations.
@@ -8,6 +8,7 @@
 # Modified Sat 09 Mar 2024 16:45:10 PM CST by JAU - added ver/date label & press Q to quit feature
 # Modified Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added labels to across top of screen 
 #   and removed tool bar at bottom of the screen
+# Modified Mon 11 Mar 2024 05:51:01 AM CDT by JAU - added grid lines and decreased plot line width
 #----------------------------------------------------------------
 import psutil
 import time
@@ -23,8 +24,8 @@ import subprocess
 
 
 # Define the version number and release date
-version_number = "0.0.1"
-release_date = "2024-03-08"
+version_number = "0.0.3"
+release_date = "2024-03-11 05:51"
 
 hostname = socket.gethostname()
 #ip_address = socket.gethostbyname(socket.gethostname())
@@ -41,6 +42,7 @@ params = {'legend.fontsize': 'x-small',
           'figure.figsize': (10, 5),
          'axes.labelsize': 'x-small',
          'axes.titlesize':'x-small',
+         'lines.linewidth': .5,
          'xtick.labelsize':'x-small',
          'ytick.labelsize':'x-small'}
 pylab.rcParams.update(params)
@@ -72,6 +74,10 @@ def main():
     #fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5), toolbar=False)
     fig.canvas.set_window_title('System Monitor')
 
+    # Add grid lines
+    ax1.grid(True)
+    ax2.grid(True)
+    ax3.grid(True)
     
     # Add a label in the upper left corner of the figure
     fig.text(0.01, 0.95, f'{hostname}     {os_info}',
