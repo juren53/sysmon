@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-#---------------------sysmon.py v0.03--------------------------
+#---------------------sysmon.py v0.04--------------------------
 # This code is a simple system monitor that displays CPU utilization, network I/O (upload and download speeds), 
 # and disk I/O (read and write speeds) in real-time using psutil for system metrics, matplotlib for 
 # visualization, and numpy for numerical operations.
@@ -9,6 +9,7 @@
 # Modified Sun 10 Mar 2024 13:02:01 PM CDT by JAU  - added labels to across top of screen 
 #   and removed tool bar at bottom of the screen
 # Modified Mon 11 Mar 2024 05:51:01 AM CDT by JAU - added grid lines and decreased plot line width
+# Modified Sun 17 Mar 2024 07:51:01 AM CDT by JAU - added Y axis ticks and labels to right sides of plots
 #----------------------------------------------------------------
 import psutil
 import time
@@ -24,8 +25,8 @@ import subprocess
 
 
 # Define the version number and release date
-version_number = "0.0.3"
-release_date = "2024-03-11 05:51"
+version_number = "0.0.4"
+release_date = "2024-03-17 07:51"
 
 hostname = socket.gethostname()
 #ip_address = socket.gethostbyname(socket.gethostname())
@@ -47,6 +48,7 @@ params = {'legend.fontsize': 'x-small',
          'ytick.labelsize':'x-small'}
 pylab.rcParams.update(params)
 pylab.rcParams['toolbar'] = 'None'
+
 
 def get_cpu_usage():
     return psutil.cpu_percent(interval=.1)
@@ -71,6 +73,8 @@ def main():
 
     plt.ion()
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5))
+
+
     #fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 5), toolbar=False)
     fig.canvas.set_window_title('System Monitor')
 
@@ -78,7 +82,12 @@ def main():
     ax1.grid(True)
     ax2.grid(True)
     ax3.grid(True)
-    
+
+    # Show Y-axis ticks and labels on the right side
+    ax1.tick_params(axis='y', which='both', right=True, labelright=True)
+    ax2.tick_params(axis='y', which='both', right=True, labelright=True)
+    ax3.tick_params(axis='y', which='both', right=True, labelright=True)
+
     # Add a label in the upper left corner of the figure
     fig.text(0.01, 0.95, f'{hostname}     {os_info}',
              verticalalignment='top', horizontalalignment='left',
