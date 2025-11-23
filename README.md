@@ -1,3 +1,5 @@
+2025-11-22
+
 # SysMon
 
 Real-time system monitoring with live graphs for CPU, Disk I/O, and Network activity.
@@ -121,3 +123,4 @@ SysMon works on Windows, Linux, and macOS, with platform-specific process monito
 - Lightweight: Updates display at 20 FPS but samples data at 1 Hz
 - Non-blocking: Process drill-down popups don't interrupt monitoring
 - Efficient: Moving average smoothing uses optimized numpy operations
+
