@@ -3,7 +3,7 @@
 # w drill down popups and Visual Scale Change Indicators
 
 '''
-Wed 04 Dec 2025 03:11:00 AM UTC Fixed X-axis behavior - X-axis now remains fixed at 0 to time window parameter instead of scrolling, data scrolls left smoothly with full window coverage
+Tue 03 Dec 2025 09:20:00 PM CST Fixed X-axis behavior - X-axis now remains fixed at 0 to time window parameter instead of scrolling, data scrolls left smoothly with full window coverage
 
 Wed 26 Nov 2025 01:01:08 AM CST Suppressed GdkPixbuf warnings - Filters out harmless GTK/Qt interaction warnings at OS level
 
@@ -467,10 +467,13 @@ class RealtimeMonitor:
             return 3
     
     def moving_average(self, data, window_size):
-        """Calculate moving average for smoothing"""
+        """Calculate moving average for smoothing using same-length output"""
         if len(data) < window_size:
-            return data
-        return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
+            return np.array(data)  # Not enough data to smooth
+        # Use mode='same' to keep same length, then trim edges to avoid edge effects
+        # This prevents data from disappearing during startup
+        smoothed = np.convolve(data, np.ones(window_size) / window_size, mode='same')
+        return smoothed
     
     def filter_data_by_time_window(self, time_data, value_data, current_time):
         """Filter data to only include points within the current time window."""
@@ -546,18 +549,31 @@ class RealtimeMonitor:
         if len(cpu_data) > 0:
             # Apply smoothing first
             cpu_smooth = self.moving_average(cpu_data, self.smooth_window)
-            # Get corresponding time values for smoothed data (aligned to right edge)
-            time_for_smooth = time_array[-(len(cpu_smooth)):] if len(cpu_smooth) <= len(time_array) else time_array
+            # Get corresponding time values - align to rightmost data points
+            # When data < smooth_window, no smoothing occurs and lengths match
+            # When data >= smooth_window, smoothing reduces length by (window_size - 1)
+            num_points = len(cpu_smooth)
+            time_for_smooth = time_array[-num_points:] if num_points <= len(time_array) else time_array
             
-            # Calculate relative time positions (most recent point at right edge)
+            # Calculate relative time positions
             current_time_val = elapsed_time
-            time_offset = max(0, current_time_val - self.max_points)
             
-            # Convert to relative time and filter to visible window
-            visible_data = [(t - time_offset, v) for t, v in zip(time_for_smooth, cpu_smooth) if t >= time_offset]
+            # When elapsed time < time window, show all data from 0
+            # When elapsed time >= time window, scroll to show only most recent max_points seconds
+            if current_time_val <= self.max_points:
+                # Early phase: show all data starting from 0
+                relative_times = time_for_smooth
+                visible_cpu = cpu_smooth
+            else:
+                # Scrolling phase: filter to visible window
+                time_offset = current_time_val - self.max_points
+                visible_data = [(t - time_offset, v) for t, v in zip(time_for_smooth, cpu_smooth) if t >= time_offset]
+                if visible_data:
+                    relative_times, visible_cpu = zip(*visible_data)
+                else:
+                    relative_times, visible_cpu = [], []
             
-            if visible_data:
-                relative_times, visible_cpu = zip(*visible_data)
+            if len(relative_times) > 0:
                 self.lines[0].set_data(relative_times, visible_cpu)
         
         # Fixed X-axis: always 0 to max_points
@@ -570,20 +586,32 @@ class RealtimeMonitor:
             # Apply smoothing first
             disk_read_smooth = self.moving_average(disk_read_data, self.smooth_window)
             disk_write_smooth = self.moving_average(disk_write_data, self.smooth_window)
-            # Get corresponding time values for smoothed data (aligned to right edge)
-            time_for_smooth = time_array[-(len(disk_read_smooth)):] if len(disk_read_smooth) <= len(time_array) else time_array
+            # Get corresponding time values - align to rightmost data points
+            num_points = len(disk_read_smooth)
+            time_for_smooth = time_array[-num_points:] if num_points <= len(time_array) else time_array
             
             # Calculate relative time positions
             current_time_val = elapsed_time
-            time_offset = max(0, current_time_val - self.max_points)
             
-            # Convert to relative time and filter to visible window
-            visible_data_read = [(t - time_offset, v) for t, v in zip(time_for_smooth, disk_read_smooth) if t >= time_offset]
-            visible_data_write = [(t - time_offset, v) for t, v in zip(time_for_smooth, disk_write_smooth) if t >= time_offset]
+            # When elapsed time < time window, show all data from 0
+            # When elapsed time >= time window, scroll to show only most recent max_points seconds
+            if current_time_val <= self.max_points:
+                # Early phase: show all data starting from 0
+                relative_times_disk = time_for_smooth
+                visible_read = disk_read_smooth
+                visible_write = disk_write_smooth
+            else:
+                # Scrolling phase: filter to visible window
+                time_offset = current_time_val - self.max_points
+                visible_data_read = [(t - time_offset, v) for t, v in zip(time_for_smooth, disk_read_smooth) if t >= time_offset]
+                visible_data_write = [(t - time_offset, v) for t, v in zip(time_for_smooth, disk_write_smooth) if t >= time_offset]
+                if visible_data_read:
+                    relative_times_disk, visible_read = zip(*visible_data_read)
+                    _, visible_write = zip(*visible_data_write)
+                else:
+                    relative_times_disk, visible_read, visible_write = [], [], []
             
-            if visible_data_read:
-                relative_times_disk, visible_read = zip(*visible_data_read)
-                _, visible_write = zip(*visible_data_write)
+            if len(relative_times_disk) > 0:
                 self.lines[1].set_data(relative_times_disk, visible_read)
                 self.lines[2].set_data(relative_times_disk, visible_write)
                 
@@ -616,20 +644,32 @@ class RealtimeMonitor:
             # Apply smoothing first
             upload_smooth = self.moving_average(upload_data, self.smooth_window)
             download_smooth = self.moving_average(download_data, self.smooth_window)
-            # Get corresponding time values for smoothed data (aligned to right edge)
-            time_for_smooth = time_array[-(len(upload_smooth)):] if len(upload_smooth) <= len(time_array) else time_array
+            # Get corresponding time values - align to rightmost data points
+            num_points = len(upload_smooth)
+            time_for_smooth = time_array[-num_points:] if num_points <= len(time_array) else time_array
             
             # Calculate relative time positions
             current_time_val = elapsed_time
-            time_offset = max(0, current_time_val - self.max_points)
             
-            # Convert to relative time and filter to visible window
-            visible_data_upload = [(t - time_offset, v) for t, v in zip(time_for_smooth, upload_smooth) if t >= time_offset]
-            visible_data_download = [(t - time_offset, v) for t, v in zip(time_for_smooth, download_smooth) if t >= time_offset]
+            # When elapsed time < time window, show all data from 0
+            # When elapsed time >= time window, scroll to show only most recent max_points seconds
+            if current_time_val <= self.max_points:
+                # Early phase: show all data starting from 0
+                relative_times_net = time_for_smooth
+                visible_upload = upload_smooth
+                visible_download = download_smooth
+            else:
+                # Scrolling phase: filter to visible window
+                time_offset = current_time_val - self.max_points
+                visible_data_upload = [(t - time_offset, v) for t, v in zip(time_for_smooth, upload_smooth) if t >= time_offset]
+                visible_data_download = [(t - time_offset, v) for t, v in zip(time_for_smooth, download_smooth) if t >= time_offset]
+                if visible_data_upload:
+                    relative_times_net, visible_upload = zip(*visible_data_upload)
+                    _, visible_download = zip(*visible_data_download)
+                else:
+                    relative_times_net, visible_upload, visible_download = [], [], []
             
-            if visible_data_upload:
-                relative_times_net, visible_upload = zip(*visible_data_upload)
-                _, visible_download = zip(*visible_data_download)
+            if len(relative_times_net) > 0:
                 self.lines[3].set_data(relative_times_net, visible_upload)
                 self.lines[4].set_data(relative_times_net, visible_download)
                 
