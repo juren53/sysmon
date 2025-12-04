@@ -3,6 +3,8 @@
 # w drill down popups and Visual Scale Change Indicators
 
 '''
+Wed 04 Dec 2025 03:11:00 AM UTC Fixed X-axis behavior - X-axis now remains fixed at 0 to time window parameter instead of scrolling, data scrolls left smoothly with full window coverage
+
 Wed 26 Nov 2025 01:01:08 AM CST Suppressed GdkPixbuf warnings - Filters out harmless GTK/Qt interaction warnings at OS level
 
 Tue 26 Nov 2025 10:02:04 AM CST Fixed window geometry persistence - Now properly remembers window position and size on Linux
@@ -238,7 +240,7 @@ class RealtimeMonitor:
         self.fig.tight_layout(pad=2.0)
         
         # Add version text in lower left corner
-        self.fig.text(0.01, 0.01, 'v0.0.9 2025-11-22', fontsize=8, 
+        self.fig.text(0.01, 0.01, 'v0.0.9b 2025-12-03', fontsize=8, 
                      ha='left', va='bottom', transform=self.fig.transFigure)
         
         # Enable auto-adjust on resize
@@ -533,88 +535,125 @@ class RealtimeMonitor:
             self.metrics_data['Network_Upload'].append(upload_rate)
             self.metrics_data['Network_Download'].append(download_rate)
         
-        # Update plots
+        # Update plots - convert absolute time to relative time within window
         time_array = list(self.times)
+        
+        if len(time_array) == 0:
+            return self.lines
         
         # Update CPU plot with smoothing
         cpu_data = list(self.metrics_data['CPU_Usage'])
-        cpu_smooth = self.moving_average(cpu_data, self.smooth_window)
-        time_smooth = time_array[len(time_array) - len(cpu_smooth):] if len(cpu_smooth) < len(time_array) else time_array
-        self.lines[0].set_data(time_smooth, cpu_smooth)
-        if len(time_array) > 0:
-            # Smooth scrolling: use fractional time for continuous scroll
+        if len(cpu_data) > 0:
+            # Apply smoothing first
+            cpu_smooth = self.moving_average(cpu_data, self.smooth_window)
+            # Get corresponding time values for smoothed data (aligned to right edge)
+            time_for_smooth = time_array[-(len(cpu_smooth)):] if len(cpu_smooth) <= len(time_array) else time_array
+            
+            # Calculate relative time positions (most recent point at right edge)
             current_time_val = elapsed_time
-            self.axes[0].set_xlim(max(0, current_time_val - self.max_points), current_time_val)
+            time_offset = max(0, current_time_val - self.max_points)
+            
+            # Convert to relative time and filter to visible window
+            visible_data = [(t - time_offset, v) for t, v in zip(time_for_smooth, cpu_smooth) if t >= time_offset]
+            
+            if visible_data:
+                relative_times, visible_cpu = zip(*visible_data)
+                self.lines[0].set_data(relative_times, visible_cpu)
+        
+        # Fixed X-axis: always 0 to max_points
+        self.axes[0].set_xlim(0, self.max_points)
         
         # Update disk I/O plot (both read and write) with smoothing
         disk_read_data = list(self.metrics_data['Disk_Read'])
         disk_write_data = list(self.metrics_data['Disk_Write'])
-        disk_read_smooth = self.moving_average(disk_read_data, self.smooth_window)
-        disk_write_smooth = self.moving_average(disk_write_data, self.smooth_window)
-        time_smooth_disk = time_array[len(time_array) - len(disk_read_smooth):] if len(disk_read_smooth) < len(time_array) else time_array
-        self.lines[1].set_data(time_smooth_disk, disk_read_smooth)
-        self.lines[2].set_data(time_smooth_disk, disk_write_smooth)
-        
-        if len(time_array) > 0:
-            # Smooth scrolling: use fractional time for continuous scroll
-            current_time_val = elapsed_time
-            self.axes[1].set_xlim(max(0, current_time_val - self.max_points), current_time_val)
+        if len(disk_read_data) > 0:
+            # Apply smoothing first
+            disk_read_smooth = self.moving_average(disk_read_data, self.smooth_window)
+            disk_write_smooth = self.moving_average(disk_write_data, self.smooth_window)
+            # Get corresponding time values for smoothed data (aligned to right edge)
+            time_for_smooth = time_array[-(len(disk_read_smooth)):] if len(disk_read_smooth) <= len(time_array) else time_array
             
-            # Auto-scale y-axis based on data within visible time window only
-            visible_read = self.filter_data_by_time_window(time_smooth_disk, disk_read_smooth, current_time_val)
-            visible_write = self.filter_data_by_time_window(time_smooth_disk, disk_write_smooth, current_time_val)
-            all_disk_visible = visible_read + visible_write
-            if len(all_disk_visible) > 0:
-                max_val = max(all_disk_visible) if max(all_disk_visible) > 0 else 10
-                self.axes[1].set_ylim(0, max_val * 1.1)
+            # Calculate relative time positions
+            current_time_val = elapsed_time
+            time_offset = max(0, current_time_val - self.max_points)
+            
+            # Convert to relative time and filter to visible window
+            visible_data_read = [(t - time_offset, v) for t, v in zip(time_for_smooth, disk_read_smooth) if t >= time_offset]
+            visible_data_write = [(t - time_offset, v) for t, v in zip(time_for_smooth, disk_write_smooth) if t >= time_offset]
+            
+            if visible_data_read:
+                relative_times_disk, visible_read = zip(*visible_data_read)
+                _, visible_write = zip(*visible_data_write)
+                self.lines[1].set_data(relative_times_disk, visible_read)
+                self.lines[2].set_data(relative_times_disk, visible_write)
                 
-                # Detect scale magnitude change for Disk I/O
-                current_magnitude = self.get_magnitude_level(max_val, 1024)  # Bytes: KB=1, MB=2, GB=3
-                if current_magnitude != self.last_disk_scale_magnitude and self.last_disk_scale_magnitude > 0:
-                    self.disk_flash_counter = 10  # Flash for ~10 frames (~500ms)
-                self.last_disk_scale_magnitude = current_magnitude
+                # Fixed X-axis: always 0 to max_points
+                self.axes[1].set_xlim(0, self.max_points)
                 
-                # Apply flash effect
-                if self.disk_flash_counter > 0:
-                    self.axes[1].set_facecolor('#FFEBEE' if self.disk_flash_counter % 4 < 2 else 'white')
-                    self.disk_flash_counter -= 1
-                else:
-                    self.axes[1].set_facecolor(self.default_axes_facecolor)
+                # Auto-scale y-axis based on visible data
+                all_disk_visible = list(visible_read) + list(visible_write)
+                if len(all_disk_visible) > 0:
+                    max_val = max(all_disk_visible) if max(all_disk_visible) > 0 else 10
+                    self.axes[1].set_ylim(0, max_val * 1.1)
+                    
+                    # Detect scale magnitude change for Disk I/O
+                    current_magnitude = self.get_magnitude_level(max_val, 1024)  # Bytes: KB=1, MB=2, GB=3
+                    if current_magnitude != self.last_disk_scale_magnitude and self.last_disk_scale_magnitude > 0:
+                        self.disk_flash_counter = 10  # Flash for ~10 frames (~500ms)
+                    self.last_disk_scale_magnitude = current_magnitude
+                    
+                    # Apply flash effect
+                    if self.disk_flash_counter > 0:
+                        self.axes[1].set_facecolor('#FFEBEE' if self.disk_flash_counter % 4 < 2 else 'white')
+                        self.disk_flash_counter -= 1
+                    else:
+                        self.axes[1].set_facecolor(self.default_axes_facecolor)
         
         # Update network plot (both upload and download) with smoothing
         upload_data = list(self.metrics_data['Network_Upload'])
         download_data = list(self.metrics_data['Network_Download'])
-        upload_smooth = self.moving_average(upload_data, self.smooth_window)
-        download_smooth = self.moving_average(download_data, self.smooth_window)
-        time_smooth_net = time_array[len(time_array) - len(upload_smooth):] if len(upload_smooth) < len(time_array) else time_array
-        self.lines[3].set_data(time_smooth_net, upload_smooth)
-        self.lines[4].set_data(time_smooth_net, download_smooth)
-        
-        if len(time_array) > 0:
-            # Smooth scrolling: use fractional time for continuous scroll
-            current_time_val = elapsed_time
-            self.axes[2].set_xlim(max(0, current_time_val - self.max_points), current_time_val)
+        if len(upload_data) > 0:
+            # Apply smoothing first
+            upload_smooth = self.moving_average(upload_data, self.smooth_window)
+            download_smooth = self.moving_average(download_data, self.smooth_window)
+            # Get corresponding time values for smoothed data (aligned to right edge)
+            time_for_smooth = time_array[-(len(upload_smooth)):] if len(upload_smooth) <= len(time_array) else time_array
             
-            # Auto-scale y-axis based on data within visible time window only
-            visible_upload = self.filter_data_by_time_window(time_smooth_net, upload_smooth, current_time_val)
-            visible_download = self.filter_data_by_time_window(time_smooth_net, download_smooth, current_time_val)
-            all_network_visible = visible_upload + visible_download
-            if len(all_network_visible) > 0:
-                max_val = max(all_network_visible) if max(all_network_visible) > 0 else 10
-                self.axes[2].set_ylim(0, max_val * 1.1)
+            # Calculate relative time positions
+            current_time_val = elapsed_time
+            time_offset = max(0, current_time_val - self.max_points)
+            
+            # Convert to relative time and filter to visible window
+            visible_data_upload = [(t - time_offset, v) for t, v in zip(time_for_smooth, upload_smooth) if t >= time_offset]
+            visible_data_download = [(t - time_offset, v) for t, v in zip(time_for_smooth, download_smooth) if t >= time_offset]
+            
+            if visible_data_upload:
+                relative_times_net, visible_upload = zip(*visible_data_upload)
+                _, visible_download = zip(*visible_data_download)
+                self.lines[3].set_data(relative_times_net, visible_upload)
+                self.lines[4].set_data(relative_times_net, visible_download)
                 
-                # Detect scale magnitude change for Network
-                current_magnitude = self.get_magnitude_level(max_val, 1000)  # Bits: Kbps=1, Mbps=2, Gbps=3
-                if current_magnitude != self.last_net_scale_magnitude and self.last_net_scale_magnitude > 0:
-                    self.net_flash_counter = 10  # Flash for ~10 frames (~500ms)
-                self.last_net_scale_magnitude = current_magnitude
+                # Fixed X-axis: always 0 to max_points
+                self.axes[2].set_xlim(0, self.max_points)
                 
-                # Apply flash effect
-                if self.net_flash_counter > 0:
-                    self.axes[2].set_facecolor('#E3F2FD' if self.net_flash_counter % 4 < 2 else 'white')
-                    self.net_flash_counter -= 1
-                else:
-                    self.axes[2].set_facecolor(self.default_axes_facecolor)
+                # Auto-scale y-axis based on visible data
+                all_network_visible = list(visible_upload) + list(visible_download)
+                if len(all_network_visible) > 0:
+                    max_val = max(all_network_visible) if max(all_network_visible) > 0 else 10
+                    self.axes[2].set_ylim(0, max_val * 1.1)
+                    
+                    # Detect scale magnitude change for Network
+                    current_magnitude = self.get_magnitude_level(max_val, 1000)  # Bits: Kbps=1, Mbps=2, Gbps=3
+                    if current_magnitude != self.last_net_scale_magnitude and self.last_net_scale_magnitude > 0:
+                        self.net_flash_counter = 10  # Flash for ~10 frames (~500ms)
+                    self.last_net_scale_magnitude = current_magnitude
+                    
+                    # Apply flash effect
+                    if self.net_flash_counter > 0:
+                        self.axes[2].set_facecolor('#E3F2FD' if self.net_flash_counter % 4 < 2 else 'white')
+                        self.net_flash_counter -= 1
+                    else:
+                        self.axes[2].set_facecolor(self.default_axes_facecolor)
         
         # Refresh layout to handle any window resizing
         self.fig.canvas.draw_idle()
